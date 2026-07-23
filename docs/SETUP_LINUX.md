@@ -11,9 +11,17 @@ sudo apt update && sudo apt upgrade -y
 
 ## Step 1: Install System Dependencies
 
-We need Python 3, pip, and Docker.
+We need Git, Python 3, pip, and Docker.
 
-### 1.1 Python and Venv
+### 1.1 Git
+Git is required to clone the repository and manage versions.
+```bash
+sudo apt install -y git
+```
+*   **Role**: Versions control and repository management.
+*   **Dependencies**: `libc6`, `libssl3`, `zlib1g`.
+
+### 1.2 Python and Venv
 Python is the core language of the project. We use `venv` to isolate dependencies.
 ```bash
 sudo apt install -y python3 python3-pip python3-venv
@@ -21,23 +29,24 @@ sudo apt install -y python3 python3-pip python3-venv
 *   **Role**: Executes the agent logic, FastAPI server, and seeding scripts.
 *   **Dependencies**: `python3-venv` is required to create isolated environments.
 
-### 1.2 Docker and Docker Compose
+### 1.3 Docker and Docker Compose
 Docker runs our five databases (Postgres, Neo4j, Chroma, Qdrant, OpenSearch) in isolated containers.
 ```bash
-# Install Docker
-sudo apt install -y docker.io docker-compose
+# Install Docker and Docker Compose plugin
+sudo apt install -y docker.io docker-compose-v2
 # Add your user to the docker group (optional, requires logout/login)
 sudo usermod -aG docker $USER
 ```
 *   **Role**: Orchestrates the multi-database environment without manual installation of each DB.
-*   **Dependencies**: `containerd`, `runc`.
+*   **Dependencies**: `containerd`, `runc`, `iptables`.
 
-### 1.3 Ollama
+### 1.4 Ollama
 Ollama runs the LLM locally.
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 *   **Role**: Serves the `R4C3R/qwen2.5-3b-heretic` model for reasoning and `nomic-embed-text` for vector search.
+*   **Dependencies**: Requires a modern Linux kernel (v4.18+ recommended) and optional NVIDIA/AMD GPU drivers for acceleration.
 
 ---
 

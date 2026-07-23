@@ -11,31 +11,41 @@ Ensure you have [Homebrew](https://brew.sh/) installed. If not, run:
 
 ## Step 1: Install System Dependencies
 
-We need Python 3 and a Docker desktop environment.
+We need Git, Python 3, and a Docker desktop environment.
 
-### 1.1 Python
+### 1.1 Git
+macOS often comes with Git via Xcode Command Line Tools, but we recommend the Homebrew version.
+```bash
+brew install git
+```
+*   **Role**: Versions control and repository management.
+*   **Dependencies**: `openssl`, `pcre2`.
+
+### 1.2 Python
 macOS usually comes with Python, but we recommend the Homebrew version for consistency.
 ```bash
 brew install python
 ```
 *   **Role**: Executes the agent logic, FastAPI server, and seeding scripts.
-*   **Dependencies**: Includes `pip` and `venv`.
+*   **Dependencies**: Includes `pip` and `venv`, depends on `openssl`, `sqlite`.
 
-### 1.2 Docker Desktop / OrbStack
+### 1.3 Docker Desktop / OrbStack
 On macOS, Docker requires a virtualized environment.
 ```bash
 # Install Docker Desktop (or use OrbStack for better performance)
 brew install --cask docker
 ```
 *   **Action**: After installation, open **Docker.app** from your Applications folder and wait for it to start.
-*   **Role**: Orchestrates the five database containers (Postgres, Neo4j, Chroma, Qdrant, OpenSearch).
+*   **Role**: Orchestrates the five database containers (Postgres, Neo4j, Chroma, Qdrant, OpenSearch). Docker Desktop includes **Docker Compose**.
+*   **Dependencies**: Requires macOS 11+ and at least 4GB of RAM.
 
-### 1.3 Ollama
+### 1.4 Ollama
 Ollama runs the LLM locally on your Mac (leveraging Apple Silicon GPU if available).
 ```bash
 brew install ollama
 ```
 *   **Role**: Serves the `R4C3R/qwen2.5-3b-heretic` model and `nomic-embed-text` embeddings.
+*   **Dependencies**: Requires macOS 11+ (Big Sur) or later.
 
 ---
 
