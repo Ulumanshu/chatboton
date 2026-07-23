@@ -33,11 +33,11 @@ sudo usermod -aG docker $USER
 *   **Dependencies**: `containerd`, `runc`.
 
 ### 1.3 Ollama
-Ollama runs the Large Language Model (LLM) and embedding models locally.
+Ollama runs the LLM locally.
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ```
-*   **Role**: Serves the `qwen2.5` model for reasoning and `nomic-embed-text` for vector search.
+*   **Role**: Serves the `R4C3R/qwen2.5-3b-heretic` model for reasoning and `nomic-embed-text` for vector search.
 
 ---
 
@@ -49,13 +49,13 @@ Start Ollama and pull the required models.
 sudo systemctl start ollama
 
 # Pull the base model and embedding model
-ollama pull qwen2.5:7b
+ollama pull R4C3R/qwen2.5-3b-heretic
 ollama pull nomic-embed-text
 ```
 
 Then, create the specialized "Chatboton" model with the custom tool-aware template:
 ```bash
-ollama create chatboton -f ollama/Modelfile
+ollama create chatboton-heretic -f ollama/Modelfile
 ```
 *   **Role**: The custom Modelfile optimizes the model for tool-calling with our specific database tools.
 

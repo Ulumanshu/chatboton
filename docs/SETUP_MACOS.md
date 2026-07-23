@@ -35,7 +35,7 @@ Ollama runs the LLM locally on your Mac (leveraging Apple Silicon GPU if availab
 ```bash
 brew install ollama
 ```
-*   **Role**: Serves the `qwen2.5` model and `nomic-embed-text` embeddings.
+*   **Role**: Serves the `R4C3R/qwen2.5-3b-heretic` model and `nomic-embed-text` embeddings.
 
 ---
 
@@ -44,13 +44,13 @@ brew install ollama
 Start the Ollama app, then pull the required models:
 ```bash
 # Pull the base model and embedding model
-ollama pull qwen2.5:7b
+ollama pull R4C3R/qwen2.5-3b-heretic
 ollama pull nomic-embed-text
 ```
 
 Then, create the specialized "Chatboton" model with the custom tool-aware template:
 ```bash
-ollama create chatboton -f ollama/Modelfile
+ollama create chatboton-heretic -f ollama/Modelfile
 ```
 *   **Role**: The custom Modelfile optimizes the model for tool-calling with our specific database tools.
 
