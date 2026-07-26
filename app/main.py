@@ -18,6 +18,7 @@ from chatboton.agent import create_chatboton_agent
 from chatboton.tool_log import ToolInvocationLog
 from chatboton.memory_pipeline import memory_pipeline_loop
 from chatboton.connectors.qdrant import QdrantConnector
+from chatboton.tools.commit_short_term_memory import commit_short_term_memory
 import asyncio
 
 templates = Jinja2Templates(directory="app/templates")
@@ -89,6 +90,30 @@ def create_app() -> FastAPI:
             {"role": message.role, "content": message.content}
             for message in payload.messages
         ]
+        
+        # Automatic background memory commitment
+        user_request = payload.messages[-1].content
+        try:
+            # We call the tool function directly. 
+            # It's decorated with @tool but can be called as a regular function.
+            # We use .invoke or just call it if it was a plain function, 
+            # but since it's a langchain tool, calling it directly works or tool.run()
+            memory_result = commit_short_term_memory.run(user_request)
+            auto_activity = [{
+                "tool": "commit_short_term_memory [AUTOMATIC]", 
+                "args": {"user_request": user_request}, 
+                "result": memory_result
+            }]
+        except Exception as e:
+            auto_activity = [{
+                "tool": "commit_short_term_memory [AUTOMATIC]", 
+                "args": {"user_request": user_request}, 
+                "result": f"Error: {str(e)}"
+            }]
+
+        for entry in auto_activity:
+            tool_log.record(entry["tool"], entry["args"], entry["result"])
+
         try:
             result = agent.invoke({"messages": input_messages})
         except Exception as exc:
@@ -98,7 +123,10 @@ def create_app() -> FastAPI:
         for entry in activity:
             tool_log.record(entry["tool"], entry["args"], entry["result"])
 
-        return {"reply": result["messages"][-1].content, "tool_activity": activity}
+        return {
+            "reply": result["messages"][-1].content, 
+            "tool_activity": auto_activity + activity
+        }
 
     @app.get("/api/tool_log")
     def get_tool_log():

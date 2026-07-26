@@ -49,20 +49,28 @@ def test_chat_returns_reply_and_tool_activity(client):
     assert response.status_code == 200
     data = response.json()
     assert data["reply"] == "The answer is 1."
-    assert data["tool_activity"] == [{
-        "tool": "query_postgres",
-        "args": {"sql": "SELECT 1"},
-        "result": '[{"?column?": 1}]',
-    }]
+    assert data["tool_activity"] == [
+        {
+            "tool": "commit_short_term_memory [AUTOMATIC]",
+            "args": {"user_request": "hi"},
+            "result": "Success",
+        },
+        {
+            "tool": "query_postgres",
+            "args": {"sql": "SELECT 1"},
+            "result": '[{"?column?": 1}]',
+        }
+    ]
 
 
 def test_chat_records_invocations_in_tool_log(client):
     client.post("/api/chat", json={"messages": [{"role": "user", "content": "hi"}]})
     client.post("/api/chat", json={"messages": [{"role": "user", "content": "again"}]})
     entries = client.get("/api/tool_log").json()["entries"]
-    assert len(entries) == 2
-    assert entries[0]["tool"] == "query_postgres"
-    assert entries[0]["result"] == '[{"?column?": 1}]'
+    assert len(entries) == 4
+    assert entries[0]["tool"] == "commit_short_term_memory [AUTOMATIC]"
+    assert entries[1]["tool"] == "query_postgres"
+    assert entries[1]["result"] == '[{"?column?": 1}]'
 
 
 def test_tool_log_clear(client):

@@ -15,6 +15,6 @@ def default_tools():
         # search_customer_reviews,
         # search_product_catalog,
         # full_text_search_docs,
-        commit_short_term_memory,
+        # commit_short_term_memory,
         search_long_term_memory,
     ]

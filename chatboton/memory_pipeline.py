@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import requests
-from chatboton.agent import create_memory_transformer_agent
+from chatboton.agent import create_memory_transformer_agent, parse_json_from_llm
 from chatboton.connectors.qdrant import QdrantConnector
 from chatboton.connectors.opensearch import OpenSearchConnector
 
@@ -43,9 +43,18 @@ async def process_one_memory():
         # Transform memory
         transformer = create_memory_transformer_agent()
         result = transformer.invoke({"messages": [{"role": "user", "content": user_request}]})
-        transformed_content = result["messages"][-1].content
+        transformed_raw = result["messages"][-1].content
+        
+        try:
+            transformed_json = parse_json_from_llm(transformed_raw)
+            include = transformed_json.get("include", False)
+            transformed_content = transformed_json.get("memory", "")
+        except Exception as e:
+            logger.warning(f"Failed to parse memory transformer output: {e}. Raw: {transformed_raw}")
+            include = False
+            transformed_content = ""
 
-        if transformed_content.strip().upper() != "IGNORE":
+        if include and transformed_content:
             # Embed transformed content
             ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             resp = requests.post(

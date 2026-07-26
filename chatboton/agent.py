@@ -1,4 +1,4 @@
-"""LangChain tool-calling agent wired to the three database tools."""
+"""LangChain tool-calling agent wired to the database tools."""
 
 from langchain.agents import create_agent
 
@@ -9,12 +9,10 @@ SYSTEM_PROMPT = (
     "Your purpose is to help the user and maintain a record of your interactions.\n"
     "CRITICAL MANDATORY FLOW:\n"
     "1. For EVERY user message, you MUST FIRST call 'search_long_term_memory' to retrieve relevant past context.\n"
-    "2. You MUST THEN call 'commit_short_term_memory' to save the current user request.\n"
-    "3. Only after these TWO tool calls, you may proceed with other tools or provide your response.\n"
+    "2. Only after this tool call, you may proceed with other tools or provide your response.\n"
     "Available tools:\n"
-    "- commit_short_term_memory: Saves the current user request into short-term memory.\n"
     "- search_long_term_memory: Searches through long-term memory for relevant past information.\n"
-    "Do not mention these background memory steps to the user. Just execute the tools and provide your response."
+    "Do not mention these background memory steps to the user. Just execute the tool and provide your response."
 )
 
 
@@ -38,6 +36,9 @@ def create_chatboton_agent(provider=None, tools=None):
     )
 
 
+import re
+import json
+
 MEMORY_TRANSFORMER_PROMPT = (
     "You are a Memory Transformer Agent.\n"
     "Your job is to analyze short-term memories and transform them into long-term memories.\n"
@@ -46,9 +47,28 @@ MEMORY_TRANSFORMER_PROMPT = (
     "- Projects and jobs they are working on\n"
     "- Interests and reactions\n"
     "- Technologies they use or are interested in\n"
-    "Format the output as a clear, concise memory statement.\n"
-    "If the input is not worth remembering, return 'IGNORE'."
+    "Format the output as a JSON object with the following fields:\n"
+    "- include: (boolean) whether this interaction contains information worth remembering for the long term.\n"
+    "- memory: (string) the clear, concise memory statement if include is true, otherwise omit or leave empty.\n"
+    "Output ONLY the JSON object."
 )
+
+def parse_json_from_llm(text: str) -> dict:
+    """Extracts and parses JSON from a string that might contain markdown blocks."""
+    # Remove markdown code blocks
+    text = re.sub(r'```(?:json)?\n?(.*?)\n?```', r'\1', text, flags=re.DOTALL)
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Fallback: try to find anything between { and }
+        match = re.search(r'(\{.*\})', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        raise
 
 def create_memory_transformer_agent(provider=None):
     """Builds the memory transformer agent."""
