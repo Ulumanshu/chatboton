@@ -19,6 +19,8 @@ class QdrantConnector(Connector):
 
     def query(self, vector: List[float], limit: int = 3) -> str:
         try:
+            if not self.client.collection_exists(collection_name=self.collection):
+                return json.dumps([])
             results = self.client.query_points(
                 collection_name=self.collection,
                 query=vector,
@@ -35,6 +37,13 @@ class QdrantConnector(Connector):
     def insert(self, vector: List[float], payload: dict) -> str:
         try:
             import uuid
+            if not self.client.collection_exists(collection_name=self.collection):
+                # Create collection if it doesn't exist, assuming a default vector size for nomic-embed-text (768)
+                from qdrant_client.models import VectorParams, Distance
+                self.client.create_collection(
+                    collection_name=self.collection,
+                    vectors_config=VectorParams(size=len(vector), distance=Distance.COSINE)
+                )
             self.client.upsert(
                 collection_name=self.collection,
                 points=[

@@ -6,7 +6,7 @@ from chatboton.connectors.qdrant import QdrantConnector
 
 @tool
 def commit_short_term_memory(user_request: str) -> str:
-    """Stores ALL user requests as searchable vectors in Qdrant.
+    """Stores ALL user requests as searchable vectors in Qdrant for continuity.
 
     Args:
         user_request: Natural language request.

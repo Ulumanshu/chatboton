@@ -10,12 +10,13 @@ participant "Chatboton Agent" as Agent
 participant "Short-Term Memory Tool\n(commit_short_term_memory)" as STTool
 database "Qdrant\n(short_term collection)" as STDB
 
-box "Background Pipeline (every 1m)" #LightBlue
-    participant "process_memory\nPipeline" as Pipeline
-    participant "Memory Processor Agent\n(hertek mode)" as Processor
+box "Background Pipeline (runs continually)" #LightBlue
+    participant "memory_pipeline_loop" as Pipeline
+    participant "Memory Transformer Agent" as Processor
 end box
 
 database "Qdrant\n(long_term collection)" as LTDB
+database "OpenSearch\n(long_term_memories)" as OSDN
 database "Neo4j\n(Graph RAG)" as GraphDB #Yellow
 
 == Interaction Phase ==
@@ -39,19 +40,21 @@ deactivate Agent
 == Memory Processing Phase (Background) ==
 
 loop every 1 minute
-    Pipeline -> STDB: Fetch new memories
+    Pipeline -> STDB: Fetch ONE memory (scroll)
     activate Pipeline
-    Pipeline -> Processor: Analyze memory relevance
+    Pipeline -> Processor: Analyze and transform memory
     activate Processor
-    note right of Processor: Decide if memory is worthy\nof long-term storage
-    Processor --> Pipeline: Worthy / Not Worthy
+    note right of Processor: Decide if memory is worthy\nof long-term storage and\nextract entities/preferences
+    Processor --> Pipeline: Transformed Memory / IGNORE
     deactivate Processor
     
-    alt Memory is Worthy
-        Pipeline -> Pipeline: Transform memory\n(summarize/extract entities)
+    alt Memory is not IGNORE
+        Pipeline -> Pipeline: Generate Embeddings\n(nomic-embed-text)
         Pipeline -> LTDB: Store in long_term collection
+        Pipeline -> OSDN: Store in long_term_memories index
         note right of LTDB: Vector similarity search\nused by search_long_term_memory
     end
+    Pipeline -> STDB: Delete from short_term
     deactivate Pipeline
 end
 

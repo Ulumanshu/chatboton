@@ -22,6 +22,8 @@ class OpenSearchConnector(Connector):
 
     def query(self, body: dict) -> str:
         try:
+            if not self.client.indices.exists(index=self.collection):
+                return json.dumps([])
             response = self.client.search(
                 body=body,
                 index=self.collection
@@ -30,8 +32,22 @@ class OpenSearchConnector(Connector):
         except Exception as exc:
             return f"OpenSearch error: {exc}"
 
+    def text_search(self, text: str, limit: int = 3) -> str:
+        """Performs BM25 search in OpenSearch."""
+        body = {
+            "query": {
+                "match": {
+                    "memory": text
+                }
+            },
+            "size": limit
+        }
+        return self.query(body)
+
     def insert(self, body: dict) -> str:
         try:
+            if not self.client.indices.exists(index=self.collection):
+                self.client.indices.create(index=self.collection)
             response = self.client.index(
                 index=self.collection,
                 body=body,

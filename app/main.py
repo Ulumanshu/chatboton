@@ -7,6 +7,7 @@ one in-memory ToolInvocationLog for the Tool Log view.
 
 from functools import lru_cache
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -15,9 +16,13 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from chatboton.agent import create_chatboton_agent
 from chatboton.tool_log import ToolInvocationLog
+from chatboton.memory_pipeline import memory_pipeline_loop
+from chatboton.connectors.qdrant import QdrantConnector
+import asyncio
 
 templates = Jinja2Templates(directory="app/templates")
 tool_log = ToolInvocationLog()
+long_term_memory = QdrantConnector(collection="long_term")
 
 
 class ChatMessage(BaseModel):
@@ -51,7 +56,19 @@ def extract_tool_activity(new_messages) -> list:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Chatboton")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Startup: start the memory pipeline loop
+        task = asyncio.create_task(memory_pipeline_loop())
+        yield
+        # Shutdown: cancel the task
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    app = FastAPI(title="Chatboton", lifespan=lifespan)
 
     @app.get("/")
     def index(request: Request):
@@ -91,7 +108,39 @@ def create_app() -> FastAPI:
     def clear_tool_log():
         tool_log.clear()
         return {"ok": True}
+    
+    @app.get("/api/memories")
+    def get_memories():
+        try:
+            if not long_term_memory.client.collection_exists("long_term"):
+                return {"entries": []}
+            response = long_term_memory.client.scroll(
+                collection_name="long_term",
+                limit=100,
+                with_payload=True,
+                with_vectors=False
+            )
+            points, _ = response
+            entries = []
+            for p in points:
+                entries.append({
+                    "id": p.id,
+                    "memory": p.payload.get("memory"),
+                    "original_request": p.payload.get("original_request")
+                })
+            return {"entries": entries}
+        except Exception as exc:
+            return JSONResponse(status_code=500, content={"error": str(exc)})
 
+    @app.post("/api/memories/clear")
+    def clear_memories():
+        try:
+            if long_term_memory.client.collection_exists("long_term"):
+                long_term_memory.client.delete_collection("long_term")
+            return {"ok": True}
+        except Exception as exc:
+            return JSONResponse(status_code=500, content={"error": str(exc)})
+    
     return app
 
 
