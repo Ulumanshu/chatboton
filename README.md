@@ -79,10 +79,14 @@ Chatboton features a multi-stage memory system to retain context across interact
 
 ![Memory Process Flow](docs/memory_process.png)
 
-- **Short-Term Memory**: Every user message is automatically committed to a `short_term` Qdrant collection using the `commit_short_term_memory` tool.
+- **Short-Term Memory**: Every user message is automatically committed to a `short_term` Qdrant collection by the application backend.
 - **Background Pipeline**: A process runs every minute to evaluate short-term memories.
-- **Memory Processor**: An agent decides if a memory is worthy of long-term storage, transforms it (summarization/extraction), and moves it to the `long_term` collection.
-- **Long-Term Search**: The `search_long_term_memory` tool allows the agent to retrieve relevant past information via vector similarity.
+- **Memory Transformer**: A dedicated agent analyzes short-term memories using a deterministic JSON-based evaluation (`include: boolean`, `memory: string`) to decide if information is worthy of long-term storage.
+- **Long-Term Storage**: Memories confirmed as valuable are transformed and moved to the `long_term` collection in Qdrant and indexed in OpenSearch.
+- **Long-Term Search**: The `search_long_term_memory` tool implements a **Hybrid Search** flow:
+    1. **Vector Search**: Similarity search in Qdrant.
+    2. **BM25 Search**: Text search in OpenSearch.
+    3. **Reranking**: A Reranker Agent evaluates combined results to return the most relevant context as a JSON list.
 
 ## Swapping providers
 

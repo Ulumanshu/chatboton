@@ -7,7 +7,8 @@ title Memory Process: Short-Term to Long-Term Pipeline
 
 actor User
 participant "Chatboton Agent" as Agent
-participant "Short-Term Memory Tool\n(commit_short_term_memory)" as STTool
+participant "Backend Logic" as Backend
+participant "Short-Term Memory Logic" as STLogic
 database "Qdrant\n(short_term collection)" as STDB
 
 box "Background Pipeline (runs continually)" #LightBlue
@@ -16,39 +17,53 @@ box "Background Pipeline (runs continually)" #LightBlue
 end box
 
 database "Qdrant\n(long_term collection)" as LTDB
-database "OpenSearch\n(long_term_memories)" as OSDN
+participant "OpenSearch\n(long_term_memories)" as OSDN
+participant "Reranker Agent" as Reranker
 database "Neo4j\n(Graph RAG)" as GraphDB #Yellow
 
 == Interaction Phase ==
 
-User -> Agent: Sends message
-activate Agent
-Agent -> Agent: Search Long-Term Memory\n(even for "hi")
-Agent -> LTDB: Vector Search (long_term)
-LTDB --> Agent: Past context (if any)
+User -> Backend: Sends message
+activate Backend
+Backend -> STLogic: Automatic commit_short_term_memory(message)
+activate STLogic
+STLogic -> STLogic: Generate Embeddings\n(nomic-embed-text)
+STLogic -> STDB: Insert Vector + Payload
+STDB --> STLogic: Success
+STLogic --> Backend: Confirmed
+deactivate STLogic
 
-Agent -> STTool: Call commit_short_term_memory(message)
-activate STTool
-STTool -> STTool: Generate Embeddings\n(nomic-embed-text)
-STTool -> STDB: Insert Vector + Payload
-STDB --> STTool: Success
-STTool --> Agent: Confirmed
-deactivate STTool
-Agent -> User: Respond to user
+Backend -> Agent: Process request
+activate Agent
+Agent -> Agent: search_long_term_memory(query)
+activate Agent
+Agent -> LTDB: Vector Search (Qdrant)
+LTDB --> Agent: Vectors hits
+Agent -> OSDN: BM25 Search (OpenSearch)
+OSDN --> Agent: Text hits
+Agent -> Reranker: Re-rank results
+activate Reranker
+Reranker --> Agent: Sorted list of memories (JSON)
+deactivate Reranker
 deactivate Agent
+Agent --> Backend: Agent Response
+deactivate Agent
+
+Backend -> User: Respond to user
+deactivate Backend
 
 == Memory Processing Phase (Background) ==
 
 loop every 1 minute
     Pipeline -> STDB: Fetch ONE memory (scroll)
     activate Pipeline
-    Pipeline -> Processor: Analyze and transform memory
+    Pipeline -> Processor: Analyze and transform memory (JSON)
     activate Processor
-    note right of Processor: Decide if memory is worthy\nof long-term storage and\nextract entities/preferences
-    Processor --> Pipeline: Transformed Memory / IGNORE
+    note right of Processor: Decide if memory is worthy\nof long-term storage (include: true)\nand extract statement
+    Processor --> Pipeline: JSON {include: bool, memory: str}
     deactivate Processor
     
-    alt Memory is not IGNORE
+    alt JSON field include is true
         Pipeline -> Pipeline: Generate Embeddings\n(nomic-embed-text)
         Pipeline -> LTDB: Store in long_term collection
         Pipeline -> OSDN: Store in long_term_memories index
@@ -60,13 +75,13 @@ end
 
 == Future Enhancements ==
 
-note over STTool, GraphDB
+note over STLogic, GraphDB
   **Future Roadmap:**
-  * **commit_short_term_memory**: Will produce nodes and embed them in Qdrant specific collections.
+  * **Short-Term Logic**: Will produce nodes and embed them in Qdrant specific collections.
   * **search_long_term_memory**: Will utilize Graph RAG (Neo4j) alongside Vector Search for deeper context.
 end note
 
-STTool -[dashed]-> GraphDB : [Future] Produce Nodes
+STLogic -[dashed]-> GraphDB : [Future] Produce Nodes
 Agent -[dashed]-> GraphDB : [Future] Graph RAG Query
 
 @enduml
