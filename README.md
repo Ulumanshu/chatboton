@@ -71,6 +71,19 @@ Things to ask the agent:
 - "Show me products related to audio." (Qdrant)
 - "Search for products with 'wireless' in the name." (OpenSearch)
 
+## Memory
+
+Chatboton features a multi-stage memory system to retain context across interactions.
+
+### Memory Architecture
+
+![Memory Process Flow](docs/memory_process.png)
+
+- **Short-Term Memory**: Every user message is automatically committed to a `short_term` Qdrant collection using the `commit_short_term_memory` tool.
+- **Background Pipeline**: A process runs every minute to evaluate short-term memories.
+- **Memory Processor**: An agent decides if a memory is worthy of long-term storage, transforms it (summarization/extraction), and moves it to the `long_term` collection.
+- **Long-Term Search**: The `search_long_term_memory` tool allows the agent to retrieve relevant past information via vector similarity.
+
 ## Swapping providers
 
 Set `CHATBOTON_PROVIDER` in `.env` (copy `.env.example`) to `ollama`,

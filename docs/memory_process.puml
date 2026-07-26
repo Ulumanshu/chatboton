@@ -1,0 +1,69 @@
+@startuml memory_flow
+
+header Memory Process Flow - Chatboton
+footer Confidential - AI Memory Architecture
+
+title Memory Process: Short-Term to Long-Term Pipeline
+
+actor User
+participant "Chatboton Agent" as Agent
+participant "Short-Term Memory Tool\n(commit_short_term_memory)" as STTool
+database "Qdrant\n(short_term collection)" as STDB
+
+box "Background Pipeline (every 1m)" #LightBlue
+    participant "process_memory\nPipeline" as Pipeline
+    participant "Memory Processor Agent\n(hertek mode)" as Processor
+end box
+
+database "Qdrant\n(long_term collection)" as LTDB
+database "Neo4j\n(Graph RAG)" as GraphDB #Yellow
+
+== Interaction Phase ==
+
+User -> Agent: Sends message
+activate Agent
+Agent -> Agent: Search Long-Term Memory\n(even for "hi")
+Agent -> LTDB: Vector Search (long_term)
+LTDB --> Agent: Past context (if any)
+
+Agent -> STTool: Call commit_short_term_memory(message)
+activate STTool
+STTool -> STTool: Generate Embeddings\n(nomic-embed-text)
+STTool -> STDB: Insert Vector + Payload
+STDB --> STTool: Success
+STTool --> Agent: Confirmed
+deactivate STTool
+Agent -> User: Respond to user
+deactivate Agent
+
+== Memory Processing Phase (Background) ==
+
+loop every 1 minute
+    Pipeline -> STDB: Fetch new memories
+    activate Pipeline
+    Pipeline -> Processor: Analyze memory relevance
+    activate Processor
+    note right of Processor: Decide if memory is worthy\nof long-term storage
+    Processor --> Pipeline: Worthy / Not Worthy
+    deactivate Processor
+    
+    alt Memory is Worthy
+        Pipeline -> Pipeline: Transform memory\n(summarize/extract entities)
+        Pipeline -> LTDB: Store in long_term collection
+        note right of LTDB: Vector similarity search\nused by search_long_term_memory
+    end
+    deactivate Pipeline
+end
+
+== Future Enhancements ==
+
+note over STTool, GraphDB
+  **Future Roadmap:**
+  * **commit_short_term_memory**: Will produce nodes and embed them in Qdrant specific collections.
+  * **search_long_term_memory**: Will utilize Graph RAG (Neo4j) alongside Vector Search for deeper context.
+end note
+
+STTool -[dashed]-> GraphDB : [Future] Produce Nodes
+Agent -[dashed]-> GraphDB : [Future] Graph RAG Query
+
+@enduml

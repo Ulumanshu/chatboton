@@ -13,6 +13,7 @@ from chatboton.connectors.neo4j import Neo4jConnector
 from chatboton.tools.postgres_tool import query_postgres_inventory
 from chatboton.connectors.postgres import PostgresConnector
 from chatboton.tools.qdrant_tool import search_product_catalog
+from chatboton.tools.search_long_term_memory import search_long_term_memory
 from chatboton.connectors.qdrant import QdrantConnector
 from chatboton.tools.opensearch_tool import full_text_search_docs
 from chatboton.connectors.opensearch import OpenSearchConnector
@@ -130,6 +131,12 @@ class TestQdrantTool:
         assert lc_tool.name == "search_product_catalog"
         assert "Qdrant" in lc_tool.description
 
+class TestSearchLongTermMemoryTool:
+    def test_tool_metadata(self):
+        lc_tool = search_long_term_memory
+        assert lc_tool.name == "search_long_term_memory"
+        assert "long-term" in lc_tool.description.lower()
+
 
 class TestOpenSearchTool:
     def test_returns_hits_as_json(self):
@@ -152,12 +159,8 @@ class TestOpenSearchTool:
 def test_default_tools_covers_every_database():
     names = {t.name for t in default_tools()}
     assert names == {
-        "query_postgres_inventory",
-        "query_purchase_graph",
-        "search_customer_reviews",
-        "search_product_catalog",
-        "full_text_search_docs",
-        "commit_short_term_memory"
+        "commit_short_term_memory",
+        "search_long_term_memory"
     }
 
 

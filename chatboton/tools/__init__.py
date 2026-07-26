@@ -4,6 +4,7 @@ from .postgres_tool import query_postgres_inventory
 from .qdrant_tool import search_product_catalog
 from .opensearch_tool import full_text_search_docs
 from .commit_short_term_memory import commit_short_term_memory
+from .search_long_term_memory import search_long_term_memory
 
 
 def default_tools():
@@ -15,4 +16,5 @@ def default_tools():
         # search_product_catalog,
         # full_text_search_docs,
         commit_short_term_memory,
+        search_long_term_memory,
     ]
