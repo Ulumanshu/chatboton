@@ -8,3 +8,8 @@ class Connector(ABC):
     def query(self, *args: Any, **kwargs: Any) -> Any:
         """Executes a query against the database."""
         pass
+
+    @abstractmethod
+    def insert(self, *args: Any, **kwargs: Any) -> Any:
+        """Inserts data into the database."""
+        pass

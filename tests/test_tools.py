@@ -6,16 +6,29 @@ from unittest.mock import MagicMock, patch
 
 from chatboton.tool_log import ToolInvocationLog
 from chatboton.tools import default_tools
-from chatboton.tools.chroma_tool import ChromaTool, ChromaConnector
-from chatboton.tools.neo4j_tool import Neo4jTool, Neo4jConnector
-from chatboton.tools.postgres_tool import PostgresTool, PostgresConnector
-from chatboton.tools.qdrant_tool import QdrantTool, QdrantConnector
-from chatboton.tools.opensearch_tool import OpenSearchTool, OpenSearchConnector
+from chatboton.tools.chroma_tool import search_customer_reviews
+from chatboton.connectors.chroma import ChromaConnector
+from chatboton.tools.neo4j_tool import query_purchase_graph
+from chatboton.connectors.neo4j import Neo4jConnector
+from chatboton.tools.postgres_tool import query_postgres_inventory
+from chatboton.connectors.postgres import PostgresConnector
+from chatboton.tools.qdrant_tool import search_product_catalog
+from chatboton.connectors.qdrant import QdrantConnector
+from chatboton.tools.opensearch_tool import full_text_search_docs
+from chatboton.connectors.opensearch import OpenSearchConnector
 
 
 class TestPostgresTool:
-    def test_rejects_non_select(self):
-        assert "only SELECT" in PostgresTool(connector=PostgresConnector(dsn="x")).run("DELETE FROM products")
+    def test_supports_insert(self):
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        cursor = MagicMock()
+        cursor.description = None
+        cursor.rowcount = 1
+        connection.execute.return_value = cursor
+        with patch("chatboton.connectors.postgres.psycopg.connect", return_value=connection):
+            result = PostgresConnector(collection="products", dsn="postgresql://u:p@h/db").query("INSERT INTO products DEFAULT VALUES")
+        assert json.loads(result) == {"status": "success", "rowcount": 1}
 
     def test_returns_rows_as_json(self):
         cursor = MagicMock()
@@ -26,22 +39,25 @@ class TestPostgresTool:
         connection = MagicMock()
         connection.__enter__.return_value = connection
         connection.execute.return_value = cursor
-        with patch("chatboton.tools.postgres_tool.psycopg.connect", return_value=connection) as connect:
-            result = PostgresTool(connector=PostgresConnector(dsn="postgresql://u:p@h/db")).run("SELECT name, price_eur FROM products")
+        with patch("chatboton.connectors.postgres.psycopg.connect", return_value=connection) as connect:
+            result = PostgresConnector(collection="products", dsn="postgresql://u:p@h/db").query("SELECT name, price_eur FROM products")
         connect.assert_called_once_with("postgresql://u:p@h/db", connect_timeout=5)
         assert json.loads(result) == [{"name": "Volta Powerbank 20k", "price_eur": "39.90"}]
 
-    def test_as_tool_metadata(self):
-        lc_tool = PostgresTool().as_tool()
-        assert lc_tool.name == "query_postgres"
+    def test_tool_metadata(self):
+        lc_tool = query_postgres_inventory
+        assert lc_tool.name == "query_postgres_inventory"
         assert "SELECT" in lc_tool.description
 
 
 class TestNeo4jTool:
-    def test_rejects_write_cypher(self):
-        tool = Neo4jTool(connector=Neo4jConnector(uri="bolt://x", user="u", password="p"))
-        for cypher in ("CREATE (n)", "MATCH (n) DETACH DELETE n", "merge (n)"):
-            assert "read-only" in tool.run(cypher)
+    def test_supports_write_cypher(self):
+        driver = MagicMock()
+        driver.__enter__.return_value = driver
+        driver.execute_query.return_value = ([], None, None)
+        with patch("chatboton.connectors.neo4j.GraphDatabase.driver", return_value=driver):
+            result = Neo4jConnector(collection="purchases", uri="bolt://x", user="u", password="p").query("CREATE (n)")
+        assert json.loads(result) == []
 
     def test_returns_records_as_json(self):
         record = MagicMock()
@@ -49,24 +65,19 @@ class TestNeo4jTool:
         driver = MagicMock()
         driver.__enter__.return_value = driver
         driver.execute_query.return_value = ([record], None, None)
-        with patch("chatboton.tools.neo4j_tool.GraphDatabase.driver", return_value=driver):
-            result = Neo4jTool(connector=Neo4jConnector(uri="bolt://x", user="u", password="p")).run(
+        with patch("chatboton.connectors.neo4j.GraphDatabase.driver", return_value=driver):
+            result = Neo4jConnector(collection="purchases", uri="bolt://x", user="u", password="p").query(
                 "MATCH (c:Customer)-[:BOUGHT]->(p) RETURN c.name AS customer, p.name AS product"
             )
         assert json.loads(result) == [{"customer": "Ada", "product": "Volta Powerbank 20k"}]
 
-    def test_as_tool_metadata(self):
-        lc_tool = Neo4jTool().as_tool()
-        assert lc_tool.name == "query_neo4j"
+    def test_tool_metadata(self):
+        lc_tool = query_purchase_graph
+        assert lc_tool.name == "query_purchase_graph"
         assert "Cypher" in lc_tool.description
 
 
 class TestChromaTool:
-    def _tool_with_mocked_collection(self, collection):
-        connector = ChromaConnector(host="h", port=1, collection="product_reviews")
-        connector._get_collection = MagicMock(return_value=collection)
-        return ChromaTool(connector=connector)
-
     def test_returns_hits_as_json(self):
         collection = MagicMock()
         collection.query.return_value = {
@@ -74,9 +85,12 @@ class TestChromaTool:
             "metadatas": [[{"product": "Volta Powerbank 20k", "rating": 5}]],
             "distances": [[0.1234567]],
         }
-        tool = self._tool_with_mocked_collection(collection)
-        hits = json.loads(tool.run("battery for travel", n_results=1))
+        connector = ChromaConnector(collection="product_reviews", host="h", port=1)
+        with patch.object(ChromaConnector, "_get_collection", return_value=collection):
+            result = connector.query("battery for travel", n_results=1)
+        
         collection.query.assert_called_once_with(query_texts=["battery for travel"], n_results=1)
+        hits = json.loads(result)
         assert hits == [{
             "document": "Great for hiking trips.",
             "metadata": {"product": "Volta Powerbank 20k", "rating": 5},
@@ -84,14 +98,14 @@ class TestChromaTool:
         }]
 
     def test_connection_error_is_reported_not_raised(self):
-        connector = ChromaConnector(host="h", port=1)
-        connector._get_collection = MagicMock(side_effect=RuntimeError("connection refused"))
-        tool = ChromaTool(connector=connector)
-        assert tool.run("anything").startswith("Chroma error:")
+        connector = ChromaConnector(collection="product_reviews", host="h", port=1)
+        with patch.object(ChromaConnector, "_get_collection", side_effect=RuntimeError("connection refused")):
+            result = connector.query("anything")
+        assert result.startswith("Chroma error:")
 
-    def test_as_tool_metadata(self):
-        lc_tool = ChromaTool().as_tool()
-        assert lc_tool.name == "search_reviews"
+    def test_tool_metadata(self):
+        lc_tool = search_customer_reviews
+        assert lc_tool.name == "search_customer_reviews"
         assert "review" in lc_tool.description.lower()
 
 
@@ -104,18 +118,16 @@ class TestQdrantTool:
         hit.score = 0.99
         client.query_points.return_value = MagicMock(points=[hit])
         
-        connector = QdrantConnector(host="h", port=1, collection="c")
+        connector = QdrantConnector(collection="c", host="h", port=1)
         connector._client = client
-        tool = QdrantTool(connector=connector)
         
-        # Test connector directly since as_tool() requires requests/ollama
         result = connector.query([0.1, 0.2, 0.3], limit=1)
         assert json.loads(result) == [{"id": 1, "payload": {"name": "Volta Powerbank 20k"}, "score": 0.99}]
         client.query_points.assert_called_once()
 
-    def test_as_tool_metadata(self):
-        lc_tool = QdrantTool().as_tool()
-        assert lc_tool.name == "search_products_v2"
+    def test_tool_metadata(self):
+        lc_tool = search_product_catalog
+        assert lc_tool.name == "search_product_catalog"
         assert "Qdrant" in lc_tool.description
 
 
@@ -124,33 +136,39 @@ class TestOpenSearchTool:
         client = MagicMock()
         client.search.return_value = {"hits": {"hits": [{"_source": {"name": "Volta"}}]}}
         
-        connector = OpenSearchConnector(host="h", port=1, index="i")
+        connector = OpenSearchConnector(collection="products", host="h", port=1)
         connector._client = client
-        tool = OpenSearchTool(connector=connector)
         
         result = connector.query({"query": {"match_all": {}}})
         assert json.loads(result) == [{"_source": {"name": "Volta"}}]
         client.search.assert_called_once()
 
-    def test_as_tool_metadata(self):
-        lc_tool = OpenSearchTool().as_tool()
-        assert lc_tool.name == "full_text_search"
+    def test_tool_metadata(self):
+        lc_tool = full_text_search_docs
+        assert lc_tool.name == "full_text_search_docs"
         assert "OpenSearch" in lc_tool.description
 
 
 def test_default_tools_covers_every_database():
     names = {t.name for t in default_tools()}
-    assert names == {"query_postgres", "query_neo4j", "search_reviews", "search_products_v2", "full_text_search"}
+    assert names == {
+        "query_postgres_inventory",
+        "query_purchase_graph",
+        "search_customer_reviews",
+        "search_product_catalog",
+        "full_text_search_docs",
+        "commit_short_term_memory"
+    }
 
 
 class TestToolInvocationLog:
     def test_record_entries_clear(self):
         log = ToolInvocationLog()
         assert log.entries() == []
-        log.record("query_postgres", {"sql": "SELECT 1"}, "[]")
+        log.record("query_postgres_inventory", {"sql": "SELECT 1"}, "[]")
         entries = log.entries()
         assert len(entries) == 1
-        assert entries[0]["tool"] == "query_postgres"
+        assert entries[0]["tool"] == "query_postgres_inventory"
         assert entries[0]["args"] == {"sql": "SELECT 1"}
         assert entries[0]["result"] == "[]"
         assert entries[0]["timestamp"]

@@ -9,11 +9,11 @@ import socket
 
 import pytest
 
-from chatboton.tools.chroma_tool import ChromaTool
-from chatboton.tools.neo4j_tool import Neo4jTool
-from chatboton.tools.postgres_tool import PostgresTool
-from chatboton.tools.qdrant_tool import QdrantTool, QdrantConnector
-from chatboton.tools.opensearch_tool import OpenSearchTool, OpenSearchConnector
+from chatboton.connectors.chroma import ChromaConnector
+from chatboton.connectors.neo4j import Neo4jConnector
+from chatboton.connectors.postgres import PostgresConnector
+from chatboton.connectors.qdrant import QdrantConnector
+from chatboton.connectors.opensearch import OpenSearchConnector
 
 
 def _port_open(host, port):
@@ -44,14 +44,14 @@ requires_opensearch = pytest.mark.skipif(
 
 @requires_postgres
 def test_postgres_tool_reads_seeded_products():
-    rows = json.loads(PostgresTool().run("SELECT name, category FROM products ORDER BY id"))
+    rows = json.loads(PostgresConnector(collection="products").query("SELECT name, category FROM products ORDER BY id"))
     assert {"name": "Volta Powerbank 20k", "category": "power"} in rows
     assert len(rows) == 6
 
 
 @requires_neo4j
 def test_neo4j_tool_reads_seeded_purchases():
-    rows = json.loads(Neo4jTool().run(
+    rows = json.loads(Neo4jConnector(collection="purchases").query(
         "MATCH (c:Customer)-[b:BOUGHT]->(p:Product) "
         "RETURN c.name AS customer, p.name AS product, b.qty AS qty ORDER BY customer"
     ))
@@ -61,7 +61,7 @@ def test_neo4j_tool_reads_seeded_purchases():
 
 @requires_chroma
 def test_chroma_tool_finds_semantically_close_review():
-    hits = json.loads(ChromaTool().run("portable battery for outdoor trips", n_results=2))
+    hits = json.loads(ChromaConnector(collection="product_reviews").query("portable battery for outdoor trips", n_results=2))
     assert len(hits) == 2
     assert any(h["metadata"]["product"] == "Volta Powerbank 20k" for h in hits)
 
@@ -75,7 +75,7 @@ def test_qdrant_tool_finds_seeded_products():
         json={"model": "nomic-embed-text", "prompt": "portable power"}
     )
     vector = resp.json()["embedding"]
-    hits = json.loads(QdrantConnector().query(vector, limit=1))
+    hits = json.loads(QdrantConnector(collection="products").query(vector, limit=1))
     assert len(hits) == 1
     assert hits[0]["payload"]["name"] == "Volta Powerbank 20k"
 
@@ -83,6 +83,6 @@ def test_qdrant_tool_finds_seeded_products():
 @requires_opensearch
 def test_opensearch_tool_finds_seeded_products():
     body = {"query": {"match": {"name": "Volta"}}}
-    hits = json.loads(OpenSearchConnector().query(body))
+    hits = json.loads(OpenSearchConnector(collection="products").query(body))
     assert len(hits) >= 1
     assert hits[0]["_source"]["name"] == "Volta Powerbank 20k"
