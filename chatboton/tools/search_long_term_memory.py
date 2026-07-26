@@ -10,6 +10,8 @@ from chatboton.connectors.opensearch import OpenSearchConnector
 @tool
 def search_long_term_memory(query: str, limit: int = 3) -> str:
     """Searches long-term memory using hybrid search (Vector + BM25) and re-ranks results.
+    This tool MUST be called FIRST for EVERY user interaction when its seems that there is not enough information
+    to retrieve context.
     
     Args:
         query: Natural language query.
