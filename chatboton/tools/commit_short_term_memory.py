@@ -22,5 +22,4 @@ def commit_short_term_memory(user_request: str) -> str:
     except Exception as e:
         return f"Embedding error: {e}"
 
-    # TODO fix chroma and quadrant connector query interface to allow for insert operations
     return QdrantConnector(collection="short_term").insert(vector=vector, payload={"request": user_request})
