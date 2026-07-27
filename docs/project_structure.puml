@@ -1,0 +1,60 @@
+@startuml project_structure
+skinparam componentStyle rectangle
+
+package "Application Layer" {
+    [FastAPI App\n(app/main.py)] as App
+}
+
+package "Agent Core" {
+    [Agent Logic\n(chatboton/agent.py)] as Agent
+    [Memory Pipeline\n(chatboton/memory_pipeline.py)] as Pipeline
+}
+
+package "Providers (LangChain Bindings)" {
+    [LLM Providers\n(chatboton/providers.py)] as Providers
+}
+
+package "Tools (Functions)" {
+    [Memory Tools] as MemoryTools
+    [Database Tools] as DBTools
+    
+    MemoryTools -down-> [search_long_term_memory.py]
+    MemoryTools -down-> [commit_short_term_memory.py]
+    DBTools -down-> [postgres_tool.py]
+    DBTools -down-> [opensearch_tool.py]
+    DBTools -down-> [qdrant_tool.py]
+    DBTools -down-> [neo4j_tool.py]
+}
+
+package "Connectors (Query Facilitators)" {
+    [Qdrant Connector] as QdrantConn
+    [OpenSearch Connector] as OSConn
+    [Postgres Connector] as PGConn
+    [Neo4j Connector] as Neo4jConn
+    [Base Connector] as BaseConn
+    
+    QdrantConn -up-|> BaseConn
+    OSConn -up-|> BaseConn
+    PGConn -up-|> BaseConn
+    Neo4jConn -up-|> BaseConn
+}
+
+App --> Agent : Invokes
+App --> MemoryTools : Automatic Commitment
+Agent --> Providers : Uses LLM
+Agent --> MemoryTools : Uses
+Agent --> DBTools : Uses
+
+[search_long_term_memory.py] --> QdrantConn
+[search_long_term_memory.py] --> OSConn
+[commit_short_term_memory.py] --> QdrantConn
+[postgres_tool.py] --> PGConn
+[opensearch_tool.py] --> OSConn
+[qdrant_tool.py] --> QdrantConn
+[neo4j_tool.py] --> Neo4jConn
+
+Pipeline --> Agent : Uses (Transformer)
+Pipeline --> QdrantConn
+Pipeline --> OSConn
+
+@enduml

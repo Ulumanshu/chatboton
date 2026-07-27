@@ -10,6 +10,18 @@ All five databases hold the same demo "gadget store" data, so cross-database
 questions work: product names match across the SQL table, the purchase graph,
 the review vectors, the Qdrant vector store, and the OpenSearch index.
 
+## Project Architecture
+
+![Project Structure](docs/project_structure.png)
+
+The project is organized into several distinct layers:
+
+- **Application Layer**: A FastAPI application (`app/main.py`) that serves the web UI and provides API endpoints for chat and memory management.
+- **Agent Core**: Contains the main agent logic (`chatboton/agent.py`) and the background memory processing pipeline (`chatboton/memory_pipeline.py`).
+- **Tools (Functions)**: A collection of LangChain-compatible tools that the agent can invoke. This includes database-specific tools (Postgres, Neo4j, etc.) and specialized memory tools.
+- **Connectors (Query Facilitators)**: Abstraction layers for interacting with different data stores (SQL, Vector, Graph, Document). They inherit from a base connector to provide a consistent interface.
+- **Providers (Model Bindings)**: LangChain bindings for various LLM providers (Ollama, OpenAI, Anthropic), allowing for easy swapping of the underlying model.
+
 ## Layout
 
 ```
