@@ -49,7 +49,7 @@ MEMORY_TRANSFORMER_PROMPT = (
     "- Technologies they use or are interested in\n"
     "Format the output as a JSON object with the following fields:\n"
     "- include: (boolean) whether this interaction contains information worth remembering for the long term.\n"
-    "- memory: (string) the clear, concise memory statement if include is true, otherwise omit or leave empty.\n"
+    "- memory: (string) the clear, concise memory statement based on memory content facts (you can infer facts but then describe the inference logic in the memory) do not make stuff up if include is true, otherwise omit or leave empty.\n"
     "Output ONLY the JSON object."
 )
 
