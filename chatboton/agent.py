@@ -49,7 +49,16 @@ MEMORY_TRANSFORMER_PROMPT = (
     "- Technologies they use or are interested in\n"
     "Format the output as a JSON object with the following fields:\n"
     "- include: (boolean) whether this interaction contains information worth remembering for the long term.\n"
-    "- memory: (string) the clear, concise memory statement based on memory content facts (you can infer facts but then describe the inference logic in the memory) do not make stuff up if include is true, otherwise omit or leave empty.\n"
+    "- memory: (string) the clear, concise memory statement based on memory content facts\n"
+    " (you can infer facts but then describe the inference logic in the memory) do not make stuff up\n"
+    " if include is true, otherwise omit or leave empty.\n"
+    " format the memory in following fashion:\n"
+    " Object: who the memory is about\n"
+    " Subject: What the memory is about\n"
+    " Sentiment: is it positive or negative\n"
+    " Topics: list of topic tags\n"
+    " Technologies: mentioned technologies\n"
+    " chatboton_formatted_memmory: whole memory with real facts from user message formatted in a way friendly for semantic search and also no fact distortion\n"
     "Output ONLY the JSON object."
 )
 
