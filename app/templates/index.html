@@ -83,6 +83,18 @@
         .memory-entry .memory-id { color: var(--muted); font-size: 0.7rem; }
         .memory-entry .content { margin-top: 0.4rem; color: var(--text); }
         .memory-entry .original { margin-top: 0.4rem; font-size: 0.75rem; color: var(--muted); font-style: italic; }
+        .memory-entry .meta { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+        .memory-entry .meta-badge {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.1rem 0.55rem;
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+        .memory-entry .meta-badge.topic { border-color: #3498db; color: #7ec3ee; }
+        .memory-entry .meta-badge.tech { border-color: #9b59b6; color: #c79ad8; }
+        .memory-entry .meta-badge.sentiment-positive { border-color: #2ecc71; color: #7fe0a7; }
+        .memory-entry .meta-badge.sentiment-negative { border-color: var(--danger); color: #ff8a7a; }
         .memory-empty { color: var(--muted); padding: 2rem; text-align: center; }
         #reset-btn {
             background: transparent;
@@ -361,8 +373,25 @@
                 const original = document.createElement("div");
                 original.className = "original";
                 original.textContent = "Based on: " + entry.original_request;
-                
+
+                const meta = document.createElement("div");
+                meta.className = "meta";
+                const md = entry.metadata || {};
+                function addBadge(text, cls) {
+                    const badge = document.createElement("span");
+                    badge.className = "meta-badge" + (cls ? " " + cls : "");
+                    badge.textContent = text;
+                    meta.appendChild(badge);
+                }
+                if (md.object) addBadge("Object: " + md.object);
+                if (md.subject) addBadge("Subject: " + md.subject);
+                if (md.sentiment) addBadge(md.sentiment, "sentiment-" + md.sentiment);
+                for (const topic of md.topics || []) addBadge(topic, "topic");
+                for (const tech of md.technologies || []) addBadge(tech, "tech");
+                for (const tag of md.tags || []) addBadge(tag);
+
                 div.append(head, content, original);
+                if (meta.childNodes.length) div.appendChild(meta);
                 container.appendChild(div);
             }
         }

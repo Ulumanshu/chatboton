@@ -7,6 +7,28 @@ from langchain_core.tools import tool
 from chatboton.connectors.qdrant import QdrantConnector
 from chatboton.connectors.opensearch import OpenSearchConnector
 
+def _format_memory_with_metadata(entry: dict) -> str:
+    """Formats a memory with its stored metadata tags as extra context."""
+    memory = entry.get("memory")
+    if not memory:
+        return ""
+    context_bits = []
+    if entry.get("object") or entry.get("subject"):
+        about = " — ".join(bit for bit in (entry.get("object"), entry.get("subject")) if bit)
+        context_bits.append(f"About: {about}.")
+    if entry.get("sentiment"):
+        context_bits.append(f"Sentiment: {entry['sentiment']}.")
+    for field in ("topics", "technologies", "tags"):
+        values = entry.get(field) or []
+        if isinstance(values, str):
+            values = [values]
+        if values:
+            context_bits.append(f"{field.capitalize()}: " + ", ".join(str(v) for v in values) + ".")
+    if context_bits:
+        return f"{memory} [{' '.join(context_bits)}]"
+    return memory
+
+
 @tool
 def search_long_term_memory(query: str, limit: int = 3) -> str:
     """Searches long-term memory using hybrid search (Vector + BM25) and re-ranks results.
@@ -44,14 +66,12 @@ def search_long_term_memory(query: str, limit: int = 3) -> str:
     # 3. Combine results
     memories = set()
     for hit in qdrant_results:
-        payload = hit.get("payload", {})
-        memory = payload.get("memory")
+        memory = _format_memory_with_metadata(hit.get("payload", {}))
         if memory:
             memories.add(memory)
-    
+
     for hit in opensearch_results:
-        source = hit.get("_source", {})
-        memory = source.get("memory")
+        memory = _format_memory_with_metadata(hit.get("_source", {}))
         if memory:
             memories.add(memory)
 

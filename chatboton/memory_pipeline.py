@@ -2,7 +2,12 @@ import asyncio
 import logging
 import os
 import requests
-from chatboton.agent import create_memory_transformer_agent, parse_json_from_llm
+from chatboton.agent import (
+    build_memory_note,
+    create_memory_transformer_agent,
+    extract_memory_metadata,
+    parse_json_from_llm,
+)
 from chatboton.connectors.qdrant import QdrantConnector
 from chatboton.connectors.opensearch import OpenSearchConnector
 
@@ -48,11 +53,13 @@ async def process_one_memory():
         try:
             transformed_json = parse_json_from_llm(transformed_raw)
             include = transformed_json.get("include", False)
-            transformed_content = transformed_json.get("memory", "")
+            transformed_content = build_memory_note(transformed_json)
+            metadata = extract_memory_metadata(transformed_json)
         except Exception as e:
             logger.warning(f"Failed to parse memory transformer output: {e}. Raw: {transformed_raw}")
             include = False
             transformed_content = ""
+            metadata = {}
 
         if include and transformed_content:
             # Embed transformed content
@@ -63,11 +70,21 @@ async def process_one_memory():
             )
             vector = resp.json()["embedding"]
 
-            # Store in long-term Qdrant
-            lt_qdrant.insert(vector=vector, payload={"memory": transformed_content, "original_request": user_request})
+            # Store in long-term Qdrant with tag metadata for filtering/search
+            payload = {
+                "memory": transformed_content,
+                "original_request": user_request,
+                "topics": metadata.get("topics", []),
+                "technologies": metadata.get("technologies", []),
+                "tags": metadata.get("tags", []),
+                "object": metadata.get("object", ""),
+                "subject": metadata.get("subject", ""),
+                "sentiment": metadata.get("sentiment", ""),
+            }
+            lt_qdrant.insert(vector=vector, payload=payload)
 
-            # Store in OpenSearch
-            os_connector.insert(body={"memory": transformed_content, "original_request": user_request})
+            # Store in OpenSearch with the same metadata
+            os_connector.insert(body=dict(payload))
             
             logger.info(f"Memory {memory_id} transformed and moved to long-term storage.")
         else:

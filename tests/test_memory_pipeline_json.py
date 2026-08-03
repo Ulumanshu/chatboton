@@ -68,7 +68,16 @@ async def test_process_one_memory_include_mechanism(monkeypatch):
     mock_transformer = MagicMock()
     # Case 2: INCLUDE via include=True
     mock_transformer.invoke.return_value = {
-        "messages": [AIMessage(content='{"include": true, "memory": "User is working on a React project."}')]
+        "messages": [AIMessage(content=json.dumps({
+            "include": True,
+            "object": "User",
+            "subject": "React project work",
+            "sentiment": "positive",
+            "topics": ["web development"],
+            "technologies": ["React"],
+            "tags": ["project"],
+            "memory": "User is working on a React project."
+        }))]
     }
     
     # Mock embeddings response
@@ -82,7 +91,22 @@ async def test_process_one_memory_include_mechanism(monkeypatch):
     # Verify lt_qdrant.insert WAS called
     assert mock_lt_qdrant.insert.call_count == 1
     args, kwargs = mock_lt_qdrant.insert.call_args
-    assert kwargs["payload"]["memory"] == "User is working on a React project."
+    payload = kwargs["payload"]
+    # The stored memory is a formatted, human-readable note
+    assert "User is working on a React project." in payload["memory"]
+    assert "Memory about User — React project work (positive)." in payload["memory"]
+    # Tags are stored as Qdrant payload metadata
+    assert payload["topics"] == ["web development"]
+    assert payload["technologies"] == ["React"]
+    assert payload["tags"] == ["project"]
+    assert payload["object"] == "User"
+    assert payload["subject"] == "React project work"
+    assert payload["sentiment"] == "positive"
+
+    # OpenSearch receives the same metadata
+    os_args, os_kwargs = mock_os_connector.insert.call_args
+    assert os_kwargs["body"]["topics"] == ["web development"]
+    assert os_kwargs["body"]["technologies"] == ["React"]
     
     # Verify it was deleted from short-term
     mock_st_qdrant.client.delete.assert_called_with(collection_name="short_term", points_selector=["456"])

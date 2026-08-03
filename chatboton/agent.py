@@ -49,18 +49,76 @@ MEMORY_TRANSFORMER_PROMPT = (
     "- Technologies they use or are interested in\n"
     "Format the output as a JSON object with the following fields:\n"
     "- include: (boolean) whether this interaction contains information worth remembering for the long term.\n"
+    "- object: (string) who the memory is about (e.g. 'User').\n"
+    "- subject: (string) what the memory is about, one short phrase.\n"
+    "- sentiment: (string) 'positive', 'negative' or 'neutral'.\n"
+    "- topics: (list of strings) topic tags, lowercase, short.\n"
+    "- technologies: (list of strings) technologies mentioned in the message.\n"
+    "- tags: (list of strings) any additional logical tags (activity type, domain, intent).\n"
     "- memory: (string) the clear, concise memory statement based on memory content facts\n"
-    " (you can infer facts but then describe the inference logic in the memory) do not make stuff up\n"
-    " if include is true, otherwise omit or leave empty.\n"
-    " format the memory in following fashion:\n"
-    " Object: who the memory is about\n"
-    " Subject: What the memory is about\n"
-    " Sentiment: is it positive or negative\n"
-    " Topics: list of topic tags\n"
-    " Technologies: mentioned technologies\n"
-    " chatboton_formatted_memmory: whole memory with real facts from user message formatted in a way friendly for semantic search and also no fact distortion\n"
+    " (you can infer facts but then describe the inference logic in the memory) do not make stuff up.\n"
+    " The memory must be a human-readable note with real facts from the user message,\n"
+    " formatted in a way friendly for semantic search and with no fact distortion.\n"
+    "If include is false, omit or leave the other fields empty.\n"
+    "Example output:\n"
+    '{"include": true, "object": "User", "subject": "React project work",\n'
+    ' "sentiment": "positive", "topics": ["web development", "frontend"],\n'
+    ' "technologies": ["React"], "tags": ["project", "work"],\n'
+    ' "memory": "User is working on a React project and enjoys frontend development."}\n'
     "Output ONLY the JSON object."
 )
+
+
+def _as_str_list(value) -> list:
+    """Coerces an LLM-produced value into a clean list of strings."""
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def extract_memory_metadata(data: dict) -> dict:
+    """Extracts structured metadata tags from the transformer JSON output."""
+    return {
+        "object": str(data.get("object", "") or "").strip(),
+        "subject": str(data.get("subject", "") or "").strip(),
+        "sentiment": str(data.get("sentiment", "") or "").strip().lower(),
+        "topics": _as_str_list(data.get("topics")),
+        "technologies": _as_str_list(data.get("technologies")),
+        "tags": _as_str_list(data.get("tags")),
+    }
+
+
+def build_memory_note(data: dict) -> str:
+    """Builds a human-readable, semantic-search-friendly memory note.
+
+    Example:
+        Memory about User — React project work (positive).
+        User is working on a React project and enjoys frontend development.
+        Topics: web development, frontend. Technologies: React. Tags: project, work.
+    """
+    metadata = extract_memory_metadata(data)
+    memory = str(data.get("memory", "") or "").strip()
+    header = ""
+    if metadata["object"] or metadata["subject"]:
+        header = f"Memory about {metadata['object'] or 'User'}"
+        if metadata["subject"]:
+            header += f" — {metadata['subject']}"
+        if metadata["sentiment"]:
+            header += f" ({metadata['sentiment']})"
+        header += "."
+    lines = [line for line in (header, memory) if line]
+    tag_bits = []
+    if metadata["topics"]:
+        tag_bits.append("Topics: " + ", ".join(metadata["topics"]) + ".")
+    if metadata["technologies"]:
+        tag_bits.append("Technologies: " + ", ".join(metadata["technologies"]) + ".")
+    if metadata["tags"]:
+        tag_bits.append("Tags: " + ", ".join(metadata["tags"]) + ".")
+    if tag_bits:
+        lines.append(" ".join(tag_bits))
+    return "\n".join(lines)
 
 def parse_json_from_llm(text: str) -> dict:
     """Extracts and parses JSON from a string that might contain markdown blocks."""

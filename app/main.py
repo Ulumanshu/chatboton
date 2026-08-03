@@ -154,7 +154,15 @@ def create_app() -> FastAPI:
                 entries.append({
                     "id": p.id,
                     "memory": p.payload.get("memory"),
-                    "original_request": p.payload.get("original_request")
+                    "original_request": p.payload.get("original_request"),
+                    "metadata": {
+                        "object": p.payload.get("object", ""),
+                        "subject": p.payload.get("subject", ""),
+                        "sentiment": p.payload.get("sentiment", ""),
+                        "topics": p.payload.get("topics", []),
+                        "technologies": p.payload.get("technologies", []),
+                        "tags": p.payload.get("tags", []),
+                    }
                 })
             return {"entries": entries}
         except Exception as exc:
