@@ -159,8 +159,8 @@ class TestOpenSearchTool:
 def test_default_tools_covers_every_database():
     names = {t.name for t in default_tools()}
     assert names == {
-        "commit_short_term_memory",
-        "search_long_term_memory"
+        "search_long_term_memory",
+        "reality_check"
     }
 
 

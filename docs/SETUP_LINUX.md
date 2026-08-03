@@ -84,6 +84,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 *   **Role**: `requirements.txt` contains libraries like `langchain` (agent logic), `fastapi` (UI), and specific DB drivers (`psycopg`, `neo4j`, `chromadb`, `qdrant-client`, `opensearch-py`).
+*   **Note**: `psutil` (system memory/disk/CPU introspection for the `reality_check` tool) is included in `requirements.txt`. If installing manually or updating an existing environment, run:
+
+```bash
+pip install psutil
+```
 
 ---
 

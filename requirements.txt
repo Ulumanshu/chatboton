@@ -14,5 +14,6 @@ chromadb
 qdrant-client
 opensearch-py
 requests
+psutil
 pytest
 httpx

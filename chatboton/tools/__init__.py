@@ -5,6 +5,7 @@ from .qdrant_tool import search_product_catalog
 from .opensearch_tool import full_text_search_docs
 from .commit_short_term_memory import commit_short_term_memory
 from .search_long_term_memory import search_long_term_memory
+from .reality_check import reality_check
 
 
 def default_tools():
@@ -17,4 +18,5 @@ def default_tools():
         # full_text_search_docs,
         # commit_short_term_memory,
         search_long_term_memory,
+        reality_check,
     ]

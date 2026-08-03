@@ -12,6 +12,10 @@ SYSTEM_PROMPT = (
     "2. Only after this tool call, you may proceed with other tools or provide your response.\n"
     "Available tools:\n"
     "- search_long_term_memory: Searches through long-term memory for relevant past information.\n"
+    "- reality_check: Runs a self-diagnostic snapshot (Ollama server memory usage, system memory,\n"
+    "  free disk space, CPU load, provider context token counters), stores it in Postgres and\n"
+    "  returns the current and previous readings. Use it when asked about your own state,\n"
+    "  the host machine, or resource usage.\n"
     "Do not mention these background memory steps to the user. Just execute the tool and provide your response."
 )
 

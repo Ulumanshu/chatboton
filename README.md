@@ -35,6 +35,7 @@ chatboton/            core package
     chroma_tool.py      search_reviews(query)       review vectors (Ollama embeddings)
     qdrant_tool.py      search_products_v2(query)   vector search in Qdrant
     opensearch_tool.py  full_text_search(query)     keyword search in OpenSearch
+    reality_check.py    reality_check()             self-diagnostic snapshot (host + Ollama)
 app/                  FastAPI + Jinja2 UI (chat + tool log tabs, reset button)
 docker/postgres-init/ SQL seed, runs on first `docker compose up`
 ollama/Modelfile      heretic base model + tool-aware qwen2.5 chat template
@@ -99,6 +100,22 @@ Chatboton features a multi-stage memory system to retain context across interact
     1. **Vector Search**: Similarity search in Qdrant.
     2. **BM25 Search**: Text search in OpenSearch.
     3. **Reranking**: A Reranker Agent evaluates combined results to return the most relevant context as a JSON list.
+
+## Reality Check (Self-Diagnostics)
+
+The agent can inspect its own runtime environment via the `reality_check` tool.
+
+![Reality Check Flow](docs/reality_check.png)
+
+Ask it things like "How are you feeling?" or "What's the state of the host?" and it will:
+
+- **Ollama Introspection**: Query the Ollama server's `/api/ps` endpoint for the models currently loaded and their RAM/VRAM footprints (with a graceful `error` payload when the server is unreachable).
+- **Host Stats**: Gather system-wide figures via `psutil` — total/used/free memory, free disk space, CPU load and count, platform info, and uptime.
+- **Context Token Counters**: Ask the active provider (`count_context_tokens`) how many tokens the current context consumes, falling back to `0` on provider errors.
+- **Time-Series Persistence**: Store every reading as a JSONB row in the Postgres `reality_checks` table (created on the fly) and return the **previous** reading alongside the current one, so the agent can compare state over time.
+- **Self-Memory**: Commit the snapshot as a `SELF STATE:` short-term memory in Qdrant, making past self-diagnostics searchable through the regular memory pipeline.
+
+The diagram source lives in [docs/reality_check.puml](docs/reality_check.puml).
 
 ## Swapping providers
 

@@ -14,7 +14,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from chatboton.agent import create_chatboton_agent
+from chatboton.agent import SYSTEM_PROMPT, create_chatboton_agent
+from chatboton.context_state import build_context_text, set_current_context
 from chatboton.tool_log import ToolInvocationLog
 from chatboton.memory_pipeline import memory_pipeline_loop
 from chatboton.connectors.qdrant import QdrantConnector
@@ -90,6 +91,8 @@ def create_app() -> FastAPI:
             {"role": message.role, "content": message.content}
             for message in payload.messages
         ]
+        # Expose the real conversation context to in-agent tools (reality_check).
+        set_current_context(build_context_text(SYSTEM_PROMPT, input_messages))
         
         # Automatic background memory commitment
         user_request = payload.messages[-1].content

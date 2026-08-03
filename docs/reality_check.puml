@@ -1,0 +1,95 @@
+@startuml reality_check_flow
+
+header Reality Check Tool - Chatboton
+footer Confidential - AI Self-Diagnostics Architecture
+
+title Reality Check: Self-Diagnostic Snapshot Pipeline
+
+actor User
+participant "Chatboton Agent" as Agent
+participant "reality_check\n(tool)" as Tool
+
+box "Data Collectors" #LightBlue
+    participant "get_ollama_memory_usage" as OllamaCheck
+    participant "get_system_stats" as SysStats
+    participant "get_context_token_counters" as TokenCount
+end box
+
+participant "Ollama Server\n(/api/ps)" as Ollama
+participant "psutil\n(host introspection)" as Psutil
+participant "Provider\n(count_context_tokens)" as Provider
+database "Postgres\n(reality_checks table)" as PG
+participant "Short-Term Memory\n(commit_short_term_memory)" as STM
+database "Qdrant\n(short_term collection)" as STDB
+
+== Trigger Phase ==
+
+User -> Agent: "How are you feeling?" /\n"What's the host state?"
+activate Agent
+Agent -> Tool: reality_check()
+activate Tool
+
+== Collection Phase ==
+
+Tool -> OllamaCheck: collect loaded models
+activate OllamaCheck
+OllamaCheck -> Ollama: GET /api/ps (timeout 5s)
+alt Ollama reachable
+    Ollama --> OllamaCheck: models list (name, size, size_vram)
+    OllamaCheck --> Tool: {models[], total_size_bytes,\ntotal_vram_bytes}
+else Ollama unreachable
+    OllamaCheck --> Tool: {error: "Ollama unreachable: ..."}
+end
+deactivate OllamaCheck
+
+Tool -> SysStats: collect host figures
+activate SysStats
+SysStats -> Psutil: virtual_memory(), disk_usage("/"),\ncpu_percent(0.1s), cpu_count(), boot_time()
+Psutil --> SysStats: raw figures
+SysStats --> Tool: {memory total/used/free/%,\ndisk total/free/%, cpu %/count,\nplatform, uptime_seconds}
+deactivate SysStats
+
+Tool -> TokenCount: collect token counters
+activate TokenCount
+TokenCount -> Provider: count_context_tokens(context)
+alt Provider available
+    Provider --> TokenCount: token count
+else Provider error
+    TokenCount -> TokenCount: fallback tokens = 0
+end
+TokenCount --> Tool: {provider, context_tokens}
+deactivate TokenCount
+
+Tool -> Tool: assemble reading\n{timestamp, ollama, system, context_tokens}
+
+== Persistence Phase ==
+
+Tool -> PG: CREATE TABLE IF NOT EXISTS reality_checks
+Tool -> PG: SELECT created_at, reading\nORDER BY id DESC LIMIT 1
+PG --> Tool: previous reading (or none)
+Tool -> PG: INSERT INTO reality_checks (reading)\nVALUES (current JSONB)
+
+== Self-Memory Phase ==
+
+Tool -> STM: commit "SELF STATE: {reading}"
+activate STM
+STM -> STDB: embed + insert vector\n(searchable later)
+STDB --> STM: Success
+STM --> Tool: memory status
+deactivate STM
+
+== Response Phase ==
+
+Tool --> Agent: JSON {current, previous,\nself_state_memory}
+deactivate Tool
+Agent -> Agent: compare current vs previous\nreadings over time
+Agent --> User: Self-diagnostic summary
+deactivate Agent
+
+note over Tool, PG
+  Every invocation appends a new row, so the
+  reality_checks table becomes a time series of
+  host + model state that the agent can reason about.
+end note
+
+@enduml

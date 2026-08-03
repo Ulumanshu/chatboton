@@ -13,6 +13,8 @@ touching the environment.
 import os
 from abc import ABC, abstractmethod
 
+import requests
+
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
@@ -28,6 +30,17 @@ class BaseProvider(ABC):
     @abstractmethod
     def create_model(self):
         """Returns a LangChain ``BaseChatModel`` for this provider."""
+
+    def count_context_tokens(self, text: str) -> int:
+        """Counts tokens for ``text`` using LangChain's common interface.
+
+        Uses ``BaseChatModel.get_num_tokens``; returns 0 when the model
+        cannot count tokens (unknown model, missing tokenizer, etc.).
+        """
+        try:
+            return self.create_model().get_num_tokens(text)
+        except Exception:
+            return 0
 
 
 class OllamaProvider(BaseProvider):
@@ -59,6 +72,36 @@ class OllamaProvider(BaseProvider):
             num_predict=self.num_predict,
         )
 
+    def count_context_tokens(self, text: str) -> int:
+        """Counts tokens with the real Ollama tokenizer.
+
+        Sends the text to ``/api/generate`` with ``num_predict: 0`` so the
+        server only evaluates the prompt, then reads ``prompt_eval_count`` —
+        the exact number of tokens the model consumed. Falls back to the
+        LangChain common interface (and ultimately 0) when the server is
+        unreachable or the response lacks the counter.
+        """
+        if not text:
+            return 0
+        try:
+            resp = requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": text,
+                    "stream": False,
+                    "options": {"num_predict": 0},
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            tokens = resp.json().get("prompt_eval_count")
+            if tokens:
+                return int(tokens)
+        except Exception:
+            pass
+        return super().count_context_tokens(text)
+
 
 class OpenAIProvider(BaseProvider):
     """OpenAI chat completions.
@@ -82,6 +125,14 @@ class OpenAIProvider(BaseProvider):
             api_key=self.api_key,
             temperature=self.temperature,
         )
+
+    def count_context_tokens(self, text: str) -> int:
+        """Counts tokens via tiktoken through LangChain; 0 for unknown models.
+
+        Models are user-selected, so counting can fail for exotic names —
+        in that case the common-interface fallback of 0 is returned.
+        """
+        return super().count_context_tokens(text)
 
 
 class AnthropicProvider(BaseProvider):
@@ -107,6 +158,14 @@ class AnthropicProvider(BaseProvider):
             api_key=self.api_key,
             temperature=self.temperature,
         )
+
+    def count_context_tokens(self, text: str) -> int:
+        """Counts tokens via Anthropic's counting API through LangChain.
+
+        Models are user-selected, so counting can fail (bad key, unknown
+        model) — the common-interface fallback of 0 is returned then.
+        """
+        return super().count_context_tokens(text)
 
 
 class AzureOpenAIProvider(BaseProvider):

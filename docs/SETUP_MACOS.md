@@ -80,6 +80,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 *   **Role**: Installs libraries for LangChain, FastAPI, and database connectors (`psycopg`, `neo4j`, `chromadb`, etc.).
+*   **Note**: `psutil` (system memory/disk/CPU introspection for the `reality_check` tool) is included in `requirements.txt`. If installing manually or updating an existing environment, run:
+
+```bash
+pip install psutil
+```
 
 ---
 
