@@ -14,6 +14,7 @@ import os
 from abc import ABC, abstractmethod
 
 import requests
+import tiktoken
 
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
@@ -27,18 +28,29 @@ DEFAULT_OLLAMA_MODEL = "chatboton-heretic"
 class BaseProvider(ABC):
     """Abstract provider: one ``create_model()`` returning a chat model."""
 
+    #: tiktoken encoding used for local token counting; providers override
+    #: this (or ``get_token_encoding``) to match their model family.
+    token_encoding = "cl100k_base"
+
     @abstractmethod
     def create_model(self):
         """Returns a LangChain ``BaseChatModel`` for this provider."""
 
-    def count_context_tokens(self, text: str) -> int:
-        """Counts tokens for ``text`` using LangChain's common interface.
+    def get_token_encoding(self) -> "tiktoken.Encoding":
+        """Returns the tiktoken encoding for this provider's model family."""
+        return tiktoken.get_encoding(self.token_encoding)
 
-        Uses ``BaseChatModel.get_num_tokens``; returns 0 when the model
-        cannot count tokens (unknown model, missing tokenizer, etc.).
+    def count_context_tokens(self, text: str) -> int:
+        """Counts tokens for ``text`` locally with tiktoken.
+
+        Uses the provider-specific encoding (``get_token_encoding``), so no
+        network calls or Hugging Face downloads happen. Returns 0 for empty
+        text or when the encoding cannot be loaded.
         """
+        if not text:
+            return 0
         try:
-            return self.create_model().get_num_tokens(text)
+            return len(self.get_token_encoding().encode(text))
         except Exception:
             return 0
 
@@ -78,7 +90,7 @@ class OllamaProvider(BaseProvider):
         Sends the text to ``/api/generate`` with ``num_predict: 0`` so the
         server only evaluates the prompt, then reads ``prompt_eval_count`` —
         the exact number of tokens the model consumed. Falls back to the
-        LangChain common interface (and ultimately 0) when the server is
+        local tiktoken counter (and ultimately 0) when the server is
         unreachable or the response lacks the counter.
         """
         if not text:
@@ -126,13 +138,15 @@ class OpenAIProvider(BaseProvider):
             temperature=self.temperature,
         )
 
-    def count_context_tokens(self, text: str) -> int:
-        """Counts tokens via tiktoken through LangChain; 0 for unknown models.
+    def get_token_encoding(self) -> "tiktoken.Encoding":
+        """Returns the exact tiktoken encoding for the configured model.
 
-        Models are user-selected, so counting can fail for exotic names —
-        in that case the common-interface fallback of 0 is returned.
+        Falls back to ``o200k_base`` (gpt-4o family) for unknown model names.
         """
-        return super().count_context_tokens(text)
+        try:
+            return tiktoken.encoding_for_model(self.model)
+        except KeyError:
+            return tiktoken.get_encoding("o200k_base")
 
 
 class AnthropicProvider(BaseProvider):
@@ -162,10 +176,16 @@ class AnthropicProvider(BaseProvider):
     def count_context_tokens(self, text: str) -> int:
         """Counts tokens via Anthropic's counting API through LangChain.
 
-        Models are user-selected, so counting can fail (bad key, unknown
-        model) — the common-interface fallback of 0 is returned then.
+        Anthropic's tokenizer is proprietary, so the official counting API is
+        the accurate source; the local tiktoken ``cl100k_base`` estimate is
+        used when the API is unavailable (bad key, offline, etc.).
         """
-        return super().count_context_tokens(text)
+        if not text:
+            return 0
+        try:
+            return self.create_model().get_num_tokens(text)
+        except Exception:
+            return super().count_context_tokens(text)
 
 
 class AzureOpenAIProvider(BaseProvider):
@@ -180,6 +200,9 @@ class AzureOpenAIProvider(BaseProvider):
         api_version: Falls back to ``AZURE_OPENAI_API_VERSION``.
         temperature: Sampling temperature.
     """
+
+    #: Azure deployments are usually gpt-4o family; o200k_base matches them.
+    token_encoding = "o200k_base"
 
     def __init__(self, deployment=None, endpoint=None, api_key=None,
                  api_version=None, temperature=0):

@@ -15,5 +15,6 @@ qdrant-client
 opensearch-py
 requests
 psutil
+tiktoken
 pytest
 httpx

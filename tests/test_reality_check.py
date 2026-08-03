@@ -170,23 +170,29 @@ class TestProviderTokenCounters:
             assert provider.count_context_tokens("") == 0
         post.assert_not_called()
 
-    def test_ollama_falls_back_to_langchain_when_server_fails(self):
-        model = MagicMock()
-        model.get_num_tokens.return_value = 5
+    def test_ollama_falls_back_to_local_tiktoken_when_server_fails(self):
         provider = OllamaProvider(model="chatboton-heretic")
-        with patch("chatboton.providers.requests.post", side_effect=OSError("down")), \
-             patch.object(OllamaProvider, "create_model", return_value=model):
-            assert provider.count_context_tokens("hi") == 5
-        model.get_num_tokens.assert_called_once_with("hi")
+        with patch("chatboton.providers.requests.post", side_effect=OSError("down")):
+            tokens = provider.count_context_tokens("hello world, how are you?")
+        assert tokens > 0  # counted locally with tiktoken, no server needed
 
-    def test_openai_returns_zero_on_failure(self):
+    def test_openai_counts_locally_with_model_specific_encoding(self):
+        provider = OpenAIProvider(model="gpt-4o-mini", api_key="k")
+        assert provider.get_token_encoding().name == "o200k_base"
+        assert provider.count_context_tokens("hello world") > 0
+
+    def test_openai_unknown_model_falls_back_to_o200k(self):
         provider = OpenAIProvider(model="custom-model", api_key="k")
-        with patch.object(OpenAIProvider, "create_model", side_effect=RuntimeError("boom")):
-            assert provider.count_context_tokens("hi") == 0
+        assert provider.get_token_encoding().name == "o200k_base"
 
-    def test_anthropic_returns_zero_on_failure(self):
+    def test_anthropic_falls_back_to_tiktoken_when_api_fails(self):
         model = MagicMock()
         model.get_num_tokens.side_effect = RuntimeError("no api")
         provider = AnthropicProvider(model="custom-claude", api_key="k")
         with patch.object(AnthropicProvider, "create_model", return_value=model):
+            assert provider.count_context_tokens("hello world") > 0
+
+    def test_base_counter_returns_zero_when_encoding_unavailable(self):
+        provider = OpenAIProvider(model="custom-model", api_key="k")
+        with patch.object(OpenAIProvider, "get_token_encoding", side_effect=RuntimeError("boom")):
             assert provider.count_context_tokens("hi") == 0
